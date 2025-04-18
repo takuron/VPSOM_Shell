@@ -51,3 +51,8 @@ services:
       - TZ=Asia/Singapore                  # <--- 修改为您所在的时区
     # 每 24 小时检查一次，清理旧镜像，只更新带标签的容器
     command: --cleanup --interval 86400 --label-enable
+
+volumes:
+  # 定义用于持久化 Vaultwarden 数据的卷
+  vw-data:
+
