@@ -1,8 +1,8 @@
 # VPSOM_Shell
 
->This project was originally hosted at [Gitlab](https://gitlab.com/takuron/vpsom_shell). If you find this project elsewhere, it is most likely an automatically mirrored version. Issues and pull requests for the mirrored projects may not receive timely responses; therefore, it is recommended to address such requirements on the source project.
+> This project was originally hosted at [Github](https://github.com/takuron/vpsom_shell). If you find this project elsewhere, it is most likely an automatically mirrored version. Issues and pull requests for the mirrored projects may not receive timely responses; therefore, it is recommended to address such requirements on the source project.
 
-> 这个项目原本托管于[Gitlab](https://gitlab.com/takuron/vpsom_shell)。如果你在其他地方看到本项目大概率为本项目自动镜像，对于镜像项目提出的issue和pull request可能无法及时得到回复，建议有以上需求前往源项目提出。
+> 这个项目原本托管于[Github](https://github.com/takuron/vpsom_shell)。如果你在其他地方看到本项目大概率为本项目自动镜像，对于镜像项目提出的issue和pull request可能无法及时得到回复，建议有以上需求前往源项目提出。
 
 ## Project Introduction 项目介绍
 
