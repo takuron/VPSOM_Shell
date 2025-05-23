@@ -7,13 +7,13 @@
 # 1. 配置 TCP BBR 拥塞控制算法
 # 2. 更改 SSH 端口为随机高位端口
 # 3. 更新系统软件包
-# 4. 安装和配置 UFW 防火墙 (允许 80, 443, 新SSH端口)
+# 4. 安装和配置 UFW 防火墙
 # 5. 提示用户进行后续操作
 #
 # 使用方法:
-# 1. 将此脚本保存为 .sh 文件 (例如: setup_debian12_simplified.sh)
-# 2. 添加执行权限: chmod +x setup_debian12_simplified.sh
-# 3. 以 root 用户身份运行: sudo ./setup_debian12_simplified.sh
+# 1. 将此脚本保存为 .sh 文件 (例如: setup_debian12_simplified_no_http.sh)
+# 2. 添加执行权限: chmod +x setup_debian12_simplified_no_http.sh
+# 3. 以 root 用户身份运行: sudo ./setup_debian12_simplified_no_http.sh
 # ==============================================================================
 
 # --- 基本设置 ---
@@ -111,11 +111,11 @@ apt install ufw -y
 ufw default deny incoming
 ufw default allow outgoing
 
-# 允许必要的端口 (新的 SSH 端口)
+# 仅允许新的 SSH 端口
 # 使用变量 $NEW_SSH_PORT
 ufw allow "$NEW_SSH_PORT" comment 'Allow New SSH Port'
 
-echo "UFW 已安装并配置规则，允许端口 $NEW_SSH_PORT。"
+echo "UFW 已安装并配置规则，仅允许新的 SSH 端口: $NEW_SSH_PORT。"
 echo "UFW 当前状态:"
 ufw status verbose # 显示规则，但防火墙尚未启用
 
@@ -159,3 +159,4 @@ echo "  部署完成，祝您使用愉快！"
 echo "===================================================================="
 
 exit 0
+
