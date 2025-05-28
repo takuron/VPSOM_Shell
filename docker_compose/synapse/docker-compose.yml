@@ -1,0 +1,105 @@
+version: '3.8'
+
+volumes:
+  synapse_data: {}
+  postgres_data: {}
+
+services:
+  # ---------------------------------------------------------------------------- #
+  #                                 PostgreSQL                                   #
+  # ---------------------------------------------------------------------------- #
+  postgres:
+    image: postgres:17-alpine # 您可以选择其他 PostgreSQL 版本
+    container_name: synapse_postgres
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true" # 标记此容器以便 Watchtower 更新
+    environment:
+      POSTGRES_USER: synapse_user      # 请替换为您自己的用户名
+      POSTGRES_PASSWORD: your_strong_password # 请替换为您自己的强密码
+      POSTGRES_DB: synapse_db          # 请替换为您自己的数据库名
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse_user -d synapse_db"] # 请确保用户名和数据库名与上面一致
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s # 给数据库一些启动时间
+    networks:
+      - matrix_net
+
+  # ---------------------------------------------------------------------------- #
+  #                                   Synapse                                    #
+  # ---------------------------------------------------------------------------- #
+  synapse:
+    image: matrixdotorg/synapse:latest # 使用 latest 标签以配合自动更新
+    container_name: synapse_server
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true" # 标记此容器以便 Watchtower 更新
+    depends_on:
+      postgres:
+        condition: service_healthy # 等待 PostgreSQL 健康后再启动 Synapse
+    volumes:
+      - synapse_data:/data
+      # 强烈建议将 homeserver.yaml 映射到宿主机以便管理
+      # - ./config/homeserver.yaml:/data/homeserver.yaml
+    ports:
+      # 仅在本地暴露 8008 端口给 Caddy2 反向代理
+      # Caddy 将处理外部的 80/443 端口和 TLS
+      - "127.0.0.1:8008:8008/tcp"
+    environment:
+      # 首次运行时，Synapse 会生成一个 homeserver.yaml 文件。
+      # 您需要先运行一次，然后编辑生成的 homeserver.yaml 以配置 PostgreSQL 和监听器。
+      #
+      # SYNAPSE_SERVER_NAME: your.domain.com  # 在 homeserver.yaml 中配置
+      # SYNAPSE_REPORT_STATS: "yes"           # 在 homeserver.yaml 中配置
+      #
+      # 以下环境变量用于指示 Synapse 使用 PostgreSQL (如果 homeserver.yaml 中已配置 psycopg2)
+      # 确保这些值与 homeserver.yaml 中的数据库配置或 PostgreSQL 服务中的环境变量一致
+      SYNAPSE_POSTGRES_HOST: postgres
+      SYNAPSE_POSTGRES_PORT: 5432
+      SYNAPSE_POSTGRES_USER: synapse_user
+      SYNAPSE_POSTGRES_PASSWORD: your_strong_password
+      SYNAPSE_POSTGRES_DATABASE: synapse_db
+      # SYNAPSE_LOG_LEVEL: DEBUG # 可选，用于调试
+      #
+      # 确保 homeserver.yaml 中的 listeners 配置为监听 http://0.0.0.0:8008
+      # 不要在此处配置 TLS，Caddy 将负责 TLS 终止。
+      # 例如，homeserver.yaml 中的 listener 配置片段:
+      # listeners:
+      #   - port: 8008
+      #     type: http
+      #     tls: false # Caddy 处理 TLS
+      #     x_forwarded: true # 告知 Synapse 它位于反向代理之后
+      #     bind_addresses: ['0.0.0.0'] # 在容器内监听所有接口
+      #     resources:
+      #       - names: [client, federation] # 根据需要调整
+      #         compress: false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s # 给 Synapse 较长的启动时间
+    networks:
+      - matrix_net
+
+  # ---------------------------------------------------------------------------- #
+  #                                 Watchtower                                 #
+  # ---------------------------------------------------------------------------- #
+  watchtower:
+    image: containrrr/watchtower
+    container_name: synapse_watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["--label-enable", "--cleanup", "--schedule", "0 0 4 * * *"] # 仅更新带标签的容器，清理旧镜像，每天凌晨4点检查
+    # environment:
+    #   WATCHTOWER_CLEANUP: "true" # 已移至 command
+    #   WATCHT zomer_SCHEDULE: "0 0 4 * * *" # 已移至 command
+    #   WATCHTOWER_LABEL_ENABLE: "true" # 已通过 command 参数设置
+networks:
+  matrix_net:
+    driver: bridge
