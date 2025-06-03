@@ -77,7 +77,6 @@ services:
       --cleanup
       --interval ${WATCHTOWER_INTERVAL:-3600}
       --label-enable
-      --debug # (可选) 开启调试日志，部署稳定后可以移除
     # Watchtower 会自动检测 freshrss 服务中定义的 image:tag 是否有更新。
     # 例如，如果 freshrss 使用 freshrss/freshrss:latest, Watchtower 会检查 latest 标签是否有新的镜像。
     # 如果使用 freshrss/freshrss:1.23.0, Watchtower 会检查 1.23.0 标签是否有更新 (通常不会，除非是补丁版本覆盖)。
