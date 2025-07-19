@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.0 # 使用 Traefik 3.0 版本
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "80:80"       # HTTP 入口
+      - "443:443"     # HTTPS 入口
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro # 监听 Docker 事件
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro # 挂载静态配置文件
+      - ./traefik/acme.json:/acme.json # 挂载 Let's Encrypt 证书文件
+      - ./traefik/conf/:/etc/traefik/conf/:ro # 挂载动态配置文件目录
+    networks:
+      - proxy # 连接到代理网络
+    labels:
+      # --- Traefik 仪表盘配置 ---
+      - "traefik.enable=true"
+      # 使用 Host 规则来定义访问仪表盘的域名
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.your-domain.com`)"
+      # 指定服务为 Traefik 内部的 api@internal
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      # 指定入口点为 websecure (HTTPS)
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      # 启用 TLS 并使用名为 'myresolver' 的证书解析器
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=myresolver"
+      # 使用名为 'auth' 的中间件进行身份验证
+      - "traefik.http.routers.traefik-dashboard.middlewares=auth"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # --interval 86400: 设置检查间隔为 24 小时
+    # --cleanup: 更新后自动删除旧镜像
+    # Watchtower 现在会查找带有 "com.centurylinklabs.watchtower.enable=true" 标签的容器
+    command: --interval 86400 --cleanup
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true # 声明 proxy 为外部网络

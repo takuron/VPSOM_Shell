@@ -1,0 +1,52 @@
+# traefik.yml (静态配置文件)
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: false
+
+# API 和仪表盘配置
+api:
+  dashboard: true
+  insecure: false # 禁止通过不安全的 HTTP 访问 API
+
+# 入口点配置
+entryPoints:
+  web:
+    address: ":80"
+    # 全局将所有 HTTP 请求重定向到 HTTPS
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    # 配置 HTTPS 选项
+    http:
+      tls:
+        certResolver: myresolver # 指定默认的证书解析器
+
+# Docker 服务发现提供者配置
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false # 默认不暴露所有容器，需要显式启用
+    network: proxy # 指定 Traefik 连接到容器的网络
+  file:
+    directory: /etc/traefik/conf # 动态配置文件目录
+    watch: true
+
+# Let's Encrypt 证书解析器配置
+certificatesResolvers:
+  myresolver:
+    acme:
+      email: "your-email@your-domain.com" # 替换为您的邮箱
+      storage: "/acme.json" # 证书存储路径
+      # 推荐使用 DNS-01 挑战，更稳定可靠
+      # 以下是 Cloudflare 的示例，请根据您的 DNS 提供商进行修改
+      # 查阅 Traefik 文档获取更多提供商信息: https://doc.traefik.io/traefik/https/acme/#dnschallenge
+      dnsChallenge:
+        provider: cloudflare
+        # 凭证将从环境变量中读取 (CF_API_EMAIL, CF_API_KEY)
+        # 您需要在 docker-compose.traefik.yml 中添加 environment 部分来设置这些变量
+        # 或者使用其他 secrets 管理方式

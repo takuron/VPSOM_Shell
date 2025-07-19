@@ -1,0 +1,11 @@
+# middlewares.yml (动态配置文件)
+http:
+  middlewares:
+    # 定义一个名为 'auth' 的 BasicAuth 中间件
+    auth:
+      basicAuth:
+        # 使用 htpasswd 工具生成的用户:密码对
+        # 例如: htpasswd -nb your_user your_password
+        # 将生成的结果粘贴到下方
+        users:
+          - "your_user:$apr1$j5wz...$I9Vw9w..." # 替换为您自己的用户名和加密后的密码
