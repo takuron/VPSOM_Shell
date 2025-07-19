@@ -4,11 +4,11 @@ services:
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
-    ports:
-      - "127.0.0.1:13020:8080"
+    restart: unless-stopped
     volumes:
       - open-webui:/app/backend/data
-    restart: unless-stopped
+    networks:
+      - proxy # 将服务连接到 proxy 网络
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 30s
@@ -16,22 +16,21 @@ services:
       retries: 5
       start_period: 60s
     labels:
-      # 添加这个标签来告诉 Watchtower 监控并更新此容器
-      - "com.centurylinklabs.watchtower.enable=true"
+      # --- Traefik 标签 ---
+      - "traefik.enable=true" # 为此服务启用 Traefik
+      - "traefik.http.routers.open-webui.rule=Host(`webui.your-domain.com`)" # 替换为您的服务域名
+      - "traefik.http.routers.open-webui.entrypoints=websecure" # 使用 websecure (HTTPS) 入口
+      - "traefik.http.routers.open-webui.tls.certresolver=myresolver" # 使用 Let's Encrypt 解析器
+      - "traefik.http.services.open-webui.loadbalancer.server.port=8080" # 告诉 Traefik 应用的内部端口
+      - "traefik.docker.network=proxy" # 指定 Traefik 使用的网络
 
-  watchtower:
-    image: containrrr/watchtower
-    container_name: watchtower
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    # --interval 86400: 设置检查间隔为 24 小时
-    # --cleanup: 更新后自动删除旧镜像
-    # Watchtower 现在会查找带有 "com.centurylinklabs.watchtower.enable=true" 标签的容器
-    command: --interval 86400 --cleanup
-    restart: unless-stopped
-    depends_on:
-      open-webui:
-        condition: service_healthy # 等待 open-webui 健康后再启动
+      # --- Watchtower 标签 ---
+      - "com.centurylinklabs.watchtower.enable=true" # 告诉 Watchtower 监控此容器
 
 volumes:
   open-webui:
+
+networks:
+  proxy:
+    external: true # 声明 proxy 为外部网络
+
