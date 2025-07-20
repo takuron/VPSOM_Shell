@@ -29,7 +29,7 @@ services:
       # 启用 TLS 并使用名为 'myresolver' 的证书解析器
       - "traefik.http.routers.traefik-dashboard.tls.certresolver=myresolver"
       # 使用名为 'auth' 的中间件进行身份验证
-      - "traefik.http.routers.traefik-dashboard.middlewares=auth"
+      - "traefik.http.routers.traefik-dashboard.middlewares=auth@file"
 
   watchtower:
     image: containrrr/watchtower
