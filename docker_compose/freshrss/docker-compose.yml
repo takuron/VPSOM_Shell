@@ -2,43 +2,48 @@ version: '3.8'
 
 services:
   freshrss:
-    image: freshrss/freshrss:latest # 您可以指定一个特定的版本标签, 例如: freshrss/freshrss:1.24.0
+    image: freshrss/freshrss:latest
     container_name: freshrss
     restart: unless-stopped
-    ports:
-      - "${FRESHRSS_PORT:-8080}:80" # 从 .env 文件读取端口，如果未设置则默认为 8080
     environment:
       - TZ=${TZ:-Asia/Shanghai}
-      - CRON_MIN=*/30 # 每30分钟自动更新订阅源 (可选)
+      - CRON_MIN=*/30
       # PostgreSQL 数据库连接配置
       - DB_TYPE=pgsql
-      - DB_HOST=db         # PostgreSQL 服务名
+      - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=${POSTGRES_DB}
       - DB_USER=${POSTGRES_USER}
       - DB_PASS=${POSTGRES_PASSWORD}
-      # FreshRSS 的 PUID 和 PGID, 如果使用 linuxserver/freshrss 镜像时可能需要
-      # - PUID=1000
-      # - PGID=1000
     volumes:
       - freshrss_data:/var/www/FreshRSS/data
-      - freshrss_extensions:/var/www/FreshRSS/extensions # (可选) 用于存放自定义扩展
+      - freshrss_extensions:/var/www/FreshRSS/extensions
+    networks:
+      - default # 连接到内部网络以访问数据库
+      - proxy   # 连接到外部代理网络以供Traefik访问
     depends_on:
       db:
-        condition: service_healthy # 等待 PostgreSQL 健康检查通过后再启动 FreshRSS
+        condition: service_healthy
     healthcheck:
-      # 检查 FreshRSS API 端点是否可访问
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost/api/fever.php || exit 1"]
-      interval: 1m30s       # 每 1 分 30 秒检查一次
-      timeout: 10s          # 检查超时时间
-      retries: 3            # 失败后重试3次
-      start_period: 1m      # 容器启动后等待 1 分钟再开始健康检查
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+      start_period: 1m
     labels:
-      # 为 Watchtower 启用自动更新
+      # --- Traefik 标签 ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.freshrss.rule=Host(`rss.your-domain.com`)" # 替换为您的服务域名
+      - "traefik.http.routers.freshrss.entrypoints=websecure"
+      - "traefik.http.routers.freshrss.tls.certresolver=myresolver"
+      - "traefik.http.services.freshrss.loadbalancer.server.port=80" # FreshRSS 容器内部端口是 80
+      - "traefik.docker.network=proxy"
+
+      # --- Watchtower 标签 ---
       - "com.centurylinklabs.watchtower.enable=true"
 
   db:
-    image: postgres:17-alpine # 推荐使用具体的版本号，例如 postgres:15 或 postgres:16
+    image: postgres:17-alpine
     container_name: freshrss_db
     restart: unless-stopped
     environment:
@@ -48,59 +53,24 @@ services:
       - TZ=${TZ:-Asia/Shanghai}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # ports: # 通常不需要将数据库端口暴露到主机，除非您需要从外部直接访问
-    #   - "5432:5432"
+    networks:
+      - default # 数据库仅在内部网络中
     healthcheck:
-      # 使用 pg_isready 工具检查 PostgreSQL 服务是否就绪
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 30s         # 每 30 秒检查一次
-      timeout: 5s           # 检查超时时间
-      retries: 5            # 失败后重试5次
-      start_period: 30s     # 容器启动后等待 30 秒再开始健康检查
-
-  watchtower:
-    image: containrrr/watchtower:latest
-    container_name: watchtower_freshrss # 给 Watchtower 一个特定的名字，方便管理
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - TZ=${TZ:-Asia/Shanghai}
-      # - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_INTERVAL:-3600} # 从 .env 读取间隔，或使用 command 参数
-      # - WATCHTOWER_CLEANUP=true # 自动清理旧的镜像
-      # - WATCHTOWER_LABEL_ENABLE=true # 仅监控带有特定标签的容器 (已通过 command 指定)
-      # - WATCHTOWER_NOTIFICATIONS= # (可选) 设置更新通知, 如 email, slack, gotify 等
-      # - WATCHTOWER_NOTIFICATION_EMAIL_FROM=...
-      # - WATCHTOWER_NOTIFICATION_EMAIL_TO=...
-      # - WATCHTOWER_NOTIFICATION_EMAIL_SERVER=...
-    command: >
-      --cleanup
-      --interval ${WATCHTOWER_INTERVAL:-3600}
-      --label-enable
-    # Watchtower 会自动检测 freshrss 服务中定义的 image:tag 是否有更新。
-    # 例如，如果 freshrss 使用 freshrss/freshrss:latest, Watchtower 会检查 latest 标签是否有新的镜像。
-    # 如果使用 freshrss/freshrss:1.23.0, Watchtower 会检查 1.23.0 标签是否有更新 (通常不会，除非是补丁版本覆盖)。
-    # 推荐使用具体的版本标签以获得更可控的更新。如果使用 :latest，请确保您了解其潜在风险。
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      # 为 Watchtower 指定此服务需要监控和更新
+      - "com.centurylinklabs.watchtower.enable=true"
 
 volumes:
   freshrss_data:
-    driver: local
   freshrss_extensions:
-    driver: local
   postgres_data:
-    driver: local
 
-# (可选) 定义一个网络，让服务在隔离的网络中运行
-# networks:
-#   freshrss_net:
-#     driver: bridge
-
-# 如果使用自定义网络，请在每个服务下添加:
-# services:
-#   freshrss:
-#     networks:
-#       - freshrss_net
-#   db:
-#     networks:
-#       - freshrss_net
-# watchtower 通常不需要加入应用网络，因为它需要访问 Docker socket
+networks:
+  default:
+  proxy:
+    external: true
