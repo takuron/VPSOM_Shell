@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:17-alpine # 您可以选择一个具体的 PostgreSQL 版本标签
+    image: postgres:17-alpine
     container_name: focalboard_postgres
     restart: unless-stopped
     environment:
@@ -11,64 +11,61 @@ services:
       POSTGRES_DB: ${POSTGRES_DB_VAR}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - default # 数据库仅在内部网络中
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"] # 在CMD-SHELL中，环境变量需要用$$转义
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s # 给PostgreSQL足够的时间初始化
+      start_period: 30s
     labels:
       # 为 Watchtower 指定此服务需要监控和更新
       - "com.centurylinklabs.watchtower.enable=true"
 
   focalboard:
-    image: mattermost/focalboard:latest # Focalboard镜像，您也可以指定一个具体的版本标签，如 vX.Y.Z
+    image: mattermost/focalboard:latest
     container_name: focalboard_app
     restart: unless-stopped
-    ports:
-      - "${FOCALBOARD_HOST_PORT:-8000}:8000" # 将容器的8000端口映射到主机的指定端口 (默认为8000)
     environment:
       FOCALBOARD_DB_TYPE: postgres
-      # 注意：下面的postgres主机名对应的是上面定义的postgres服务名
       FOCALBOARD_DB_CONFIG: "postgres://${POSTGRES_USER_VAR}:${POSTGRES_PASSWORD_VAR}@postgres:5432/${POSTGRES_DB_VAR}?sslmode=disable&connect_timeout=10"
-      FOCALBOARD_PORT: 8000 # Focalboard 容器内监听的端口
-      # FOCALBOARD_SERVER_ROOT: "http://your_domain_or_ip:${FOCALBOARD_HOST_PORT:-8000}" # 如果通过域名或固定IP访问，请配置此项
-      # FOCALBOARD_ENABLE_LOCAL_MODE: "false" # 如果使用PostgreSQL，可以考虑禁用本地模式（SQLite）
-      # FOCALBOARD_WEBHOOK_UPDATE: "true" # 允许通过webhook更新看板 (可选)
+      FOCALBOARD_PORT: 8000
+      # 设置站点URL，这对于生成正确的链接很重要
+      FOCALBOARD_SITE_URL: "https://focalboard.your-domain.com" # 替换为您的域名
     volumes:
-      - focalboard_data:/opt/focalboard/data # 持久化Focalboard的数据，如上传的文件等
+      - focalboard_data:/opt/focalboard/data
+    networks:
+      - default # 连接到内部网络以访问数据库
+      - proxy   # 连接到外部代理网络以供Traefik访问
     depends_on:
       postgres:
-        condition: service_healthy # 等待PostgreSQL健康检查通过后再启动Focalboard
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v2/status || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s # 给Focalboard足够的时间连接数据库并启动
+      start_period: 30s
     labels:
-      # 为 Watchtower 指定此服务需要监控和更新
-      - "com.centurylinklabs.watchtower.enable=true"
+      # --- Traefik 标签 ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.focalboard.rule=Host(`focalboard.your-domain.com`)" # 替换为您的服务域名
+      - "traefik.http.routers.focalboard.entrypoints=websecure"
+      - "traefik.http.routers.focalboard.tls.certresolver=myresolver"
+      - "traefik.http.services.focalboard.loadbalancer.server.port=8000"
+      - "traefik.docker.network=proxy" # 明确告诉Traefik使用哪个网络
 
-  watchtower:
-    image: containrrr/watchtower:latest # Watchtower 镜像，您也可以指定一个具体的版本标签
-    container_name: focalboard_watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock # Watchtower需要访问Docker守护进程
-    environment:
-      # Watchtower 将只更新带有 "com.centurylinklabs.watchtower.enable=true" 标签的容器
-      WATCHTOWER_LABEL_ENABLE: "true"
-      # 检查更新的频率（单位：秒），例如：86400秒 = 24小时
-      WATCHTOWER_POLL_INTERVAL: 86400
-      # 更新后清理旧的镜像
-      WATCHTOWER_CLEANUP: "true"
-      # 可选：指定Watchtower监控的容器名称（如果不想使用label方式或者想更严格的控制）
-      # WATCHTOWER_SCOPE: "focalboard_app focalboard_postgres" # 使用空格或逗号分隔的容器名列表
-    # Watchtower 默认会周期性执行检查。不需要额外的 command。
+      # --- Watchtower 标签 ---
+      - "com.centurylinklabs.watchtower.enable=true"
 
 volumes:
   postgres_data:
-    driver: local
   focalboard_data:
-    driver: local
+
+networks:
+  # 默认的内部网络
+  default:
+  # 用于连接到Traefik的外部网络
+  proxy:
+    external: true
